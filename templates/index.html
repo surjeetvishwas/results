@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DigiLocker NAD - CISCE</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div class="branding">
+      <img src="{{ url_for('static', filename='img/I_Flag.png') }}" alt="Indian Flag">
+      <span>Government of India</span>
+    </div>
+    <div class="actions">
+      <a href="#main-content">Skip to Main Content</a>
+      <span class="sep">|</span>
+      <button aria-label="Decrease font size">-A</button>
+      <button aria-label="Default font size" class="active">A</button>
+      <button aria-label="Increase font size">A+</button>
+      <span class="sep">|</span>
+      <button aria-haspopup="true" aria-expanded="false">Language ▾</button>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header id="main-content" class="site-header">
+    <div class="header-left">
+      <img src="{{ url_for('static', filename='img/NAD_Logo_indi.png') }}"
+           alt="DigiLocker NAD logo" class="logo">
+      <div class="tagline">A Digital Repository for Academic Institutions</div>
+    </div>
+    <button class="student-btn">Student</button>
+  </header>
+
+  <!-- Main Card + Result -->
+  <main class="container">
+    <div id="main-card" class="card">
+
+      <!-- Hero -->
+      <div class="hero">
+        <img src="{{ url_for('static', filename='img/001447.png') }}"
+             alt="CISCE Logo" class="council-logo">
+        <h1>Council for the Indian School Certificate Examination (CISCE)</h1>
+        <p class="description">
+          CISCE (<a href="https://www.cisceboard.org/" target="_blank">cisceboard.org</a>) is issuing marksheets,
+          passing certificates, and migration certificates through DigiLocker. These can be pulled by students
+          into their DigiLocker accounts. Currently available Marksheets, Passing Certificates, &amp; Migration
+          Certificates of ICSE (Class X) &amp; ISC (Class XII) from the year 2000–2025.
+        </p>
+      </div>
+
+      <!-- Form -->
+      <div class="form-section">
+        <h2>Access your document!</h2>
+        <input type="text" id="unique-id" placeholder="Unique Id*">
+        <div class="note">Enter Your Unique Id</div>
+        <button class="submit-btn" onclick="fetchDocument()">
+          <img src="{{ url_for('static', filename='img/digilocker-icon.svg') }}"
+               alt="" class="btn-icon">
+          Access With DigiLocker MeriPehchaan
+        </button>
+        <p id="error-msg" class="error hidden">Document not found.</p>
+      </div>
+
+      <!-- Bottom Note -->
+      <div class="card-footer-note">
+        <p>We use basic information from your DigiLocker account to identify you and allow access to NAD platform.</p>
+        <p>By continuing, you agree to NAD’s <a href="#">Terms & Conditions</a> and <a href="#">Privacy Policy</a>.</p>
+      </div>
+
+      <!-- Result Area (hidden initially) -->
+      <div id="result-area" class="hidden">
+        <img id="document-img" src="" alt="Your Document" class="document-img"/>
+        <div class="mt-4">
+          <button onclick="resetView()" class="submit-btn">Search Again</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-top">
+      <div class="ft-about">
+        <img src="{{ url_for('static', filename='img/NAD Logo White.png') }}"
+             alt="DigiLocker NAD" class="ft-logo">
+        <p>
+          DigiLocker and NAD are initiatives of Ministry of Electronics and Information
+          Technology (MeitY) and Ministry of Human Resource Development (MHRD) respectively.
+        </p>
+      </div>
+      <div class="ft-links">
+        <div>
+          <h4>About</h4>
+          <ul>
+            <li>About</li><li>FAQs</li><li>Statistics</li><li>Resources</li><li>APIs</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Support</h4>
+          <ul>
+            <li>Circulars</li><li>Customer support</li><li>Privacy policy</li><li>Copyright</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ft-powered">
+        <h4>Powered by</h4>
+        <img src="{{ url_for('static', filename='img/Digital India Logo White.png') }}"
+             alt="Digital India">
+        <p>
+          Digital India Corporation (DIC)<br>
+          Ministry of Electronics & IT (MeitY)<br>
+          Government of India
+        </p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      © 2020–2025 NAD DIGILOCKER • All rights reserved • NeGD | MeitY Government of India®
+    </div>
+  </footer>
+
+  <!-- Accessibility Button -->
+  <button class="fab" aria-label="Accessibility options">♿</button>
+
+  <!-- JavaScript -->
+  <script>
+    function fetchDocument() {
+      const uid = document.getElementById('unique-id').value.trim();
+      const err = document.getElementById('error-msg');
+      err.classList.add('hidden');
+
+      fetch(`/api/get-document/${uid}`)
+        .then(res => {
+          if (!res.ok) throw new Error();
+          return res.json();
+        })
+        .then(data => {
+          // hide hero, form, and bottom note
+          document.querySelector('#main-card .hero').classList.add('hidden');
+          document.querySelector('#main-card .form-section').classList.add('hidden');
+          document.querySelector('#main-card .card-footer-note').classList.add('hidden');
+
+          // show result area
+          const img = document.getElementById('document-img');
+          img.src = data.imageUrl;
+          document.getElementById('result-area').classList.remove('hidden');
+        })
+        .catch(() => {
+          err.classList.remove('hidden');
+        });
+    }
+
+    function resetView() {
+      document.getElementById('result-area').classList.add('hidden');
+      document.querySelector('#main-card .hero').classList.remove('hidden');
+      document.querySelector('#main-card .form-section').classList.remove('hidden');
+      document.querySelector('#main-card .card-footer-note').classList.remove('hidden');
+      document.getElementById('unique-id').value = '';
+      document.getElementById('error-msg').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

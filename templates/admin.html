@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Upload</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    h1 { margin-bottom: 1rem; }
+    form { border: 1px solid #ccc; padding: 1rem; border-radius: 4px; margin-bottom: 2rem; }
+    label { display: block; margin-top: 0.5rem; }
+    input[type="text"], input[type="file"] { display: block; width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; }
+    .btn { margin-top: 1rem; padding: 0.5rem 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+    th { background: #f4f4f4; }
+    .actions button, .actions a { margin-right: 0.5rem; }
+    .message { color: green; margin-top: 1rem; }
+    .error { color: red; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>{{ edit_doc and 'Edit Document' or 'Upload Document' }}</h1>
+
+  {% if message %}
+    <p class="{{ 'error' if 'required' in message else 'message' }}">{{ message }}</p>
+  {% endif %}
+
+  <form method="POST" enctype="multipart/form-data">
+    {% if edit_doc %}
+      <input type="hidden" name="doc_id" value="{{ edit_doc.id }}">
+    {% endif %}
+    <label>Unique ID:</label>
+    <input type="text" name="unique_id" value="{{ edit_doc.unique_id if edit_doc else '' }}" required>
+
+    <label>Display Name:</label>
+    <input type="text" name="display_name" value="{{ edit_doc.display_name if edit_doc else '' }}">
+
+    <label>File: {% if edit_doc %}(leave blank to keep existing){% endif %}</label>
+    <input type="file" name="file" accept="image/*" {{ 'required' if not edit_doc else '' }}>
+
+    <button type="submit" class="btn">{{ edit_doc and 'Update' or 'Upload' }}</button>
+    {% if edit_doc %}
+      <a href="{{ url_for('admin') }}">Cancel</a>
+    {% endif %}
+  </form>
+
+  <h2>Existing Documents</h2>
+  {% if docs %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Unique ID</th>
+          <th>Name</th>
+          <th>Filename</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for doc in docs %}
+        <tr>
+          <td>{{ doc.id }}</td>
+          <td>{{ doc.unique_id }}</td>
+          <td>{{ doc.display_name or '-' }}</td>
+          <td>{{ doc.filename }}</td>
+          <td class="actions">
+            <a href="{{ url_for('admin', edit_id=doc.id) }}">Edit</a>
+            <form method="POST" style="display:inline;">
+              <button type="submit" name="delete_id" value="{{ doc.id }}">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No documents uploaded yet.</p>
+  {% endif %}
+</body>
+</html>
