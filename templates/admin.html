@@ -3,57 +3,96 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Admin Upload</title>
+  <title>Admin Panel – Manage Documents & QR Data</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; }
-    h1 { margin-bottom: 1rem; }
-    form { border: 1px solid #ccc; padding: 1rem; border-radius: 4px; margin-bottom: 2rem; }
-    label { display: block; margin-top: 0.5rem; }
-    input[type="text"], input[type="file"] { display: block; width: 100%; padding: 0.5rem; margin-bottom: 0.5rem; }
-    .btn { margin-top: 1rem; padding: 0.5rem 1rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f9f9f9; }
+    h1 { margin-bottom: 0.5rem; }
+    a.logout { float: right; color: #0078d7; text-decoration: none; }
+    a.logout:hover { text-decoration: underline; }
+    .message { color: green; margin-bottom: 1rem; }
+    .error   { color: red; margin-bottom: 1rem; }
+    form, .search-form { background: #fff; padding: 1rem; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 1.5rem; }
+    .search-form input[type="text"] { padding: 0.5rem; width: 200px; }
+    .search-form button { padding: 0.5rem 1rem; }
+    label { display: block; margin-top: 0.5rem; font-weight: bold; }
+    input[type="text"], textarea, input[type="file"] {
+      display: block; width: 100%; padding: 0.5rem; margin-top: 0.25rem;
+      font-family: inherit;
+    }
+    textarea { height: 80px; resize: vertical; }
+    .btn { margin-top: 1rem; padding: 0.5rem 1rem; background: #0052cc; color: #fff; border: none; cursor: pointer; }
+    .btn:hover { background: #003b99; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
     th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
     th { background: #f4f4f4; }
-    .actions button, .actions a { margin-right: 0.5rem; }
-    .message { color: green; margin-top: 1rem; }
-    .error { color: red; margin-top: 1rem; }
+    .actions a, .actions button { margin-right: 0.5rem; }
+    .actions button { background: #d9534f; color: #fff; border: none; padding: 0.3rem 0.6rem; cursor: pointer; }
+    .actions button:hover { background: #c9302c; }
+    /* QR Preview */
+    #qr_preview { margin-top: 1rem; }
   </style>
 </head>
 <body>
-  <h1>{{ edit_doc and 'Edit Document' or 'Upload Document' }}</h1>
+  <h1>Admin Panel</h1>
+  <a href="{{ url_for('logout') }}" class="logout">Log out</a>
+  <div style="clear: both;"></div>
 
   {% if message %}
     <p class="{{ 'error' if 'required' in message else 'message' }}">{{ message }}</p>
   {% endif %}
 
-  <form method="POST" enctype="multipart/form-data">
+  <!-- Search Form -->
+  <form method="GET" class="search-form">
+    <label for="search">Search Documents</label>
+    <input type="text" id="search" name="search" value="{{ search }}" placeholder="by Unique ID or Name">
+    <button type="submit">Search</button>
+  </form>
+
+  <!-- Upload / Edit Form -->
+  <form method="POST" enctype="multipart/form-data" id="doc-form">
     {% if edit_doc %}
       <input type="hidden" name="doc_id" value="{{ edit_doc.id }}">
     {% endif %}
-    <label>Unique ID:</label>
-    <input type="text" name="unique_id" value="{{ edit_doc.unique_id if edit_doc else '' }}" required>
 
-    <label>Display Name:</label>
-    <input type="text" name="display_name" value="{{ edit_doc.display_name if edit_doc else '' }}">
+    <label for="unique_id">Unique ID<span style="color:red;">*</span></label>
+    <input type="text" id="unique_id" name="unique_id"
+           value="{{ edit_doc.unique_id if edit_doc else '' }}" required>
 
-    <label>File: {% if edit_doc %}(leave blank to keep existing){% endif %}</label>
-    <input type="file" name="file" accept="image/*" {{ 'required' if not edit_doc else '' }}>
+    <label for="display_name">Display Name</label>
+    <input type="text" id="display_name" name="display_name"
+           value="{{ edit_doc.display_name if edit_doc else '' }}">
 
-    <button type="submit" class="btn">{{ edit_doc and 'Update' or 'Upload' }}</button>
+    <label for="file">File {% if edit_doc %}(leave blank to keep existing){% endif %}</label>
+    <input type="file" id="file" name="file" accept="image/*"
+           {{ 'required' if not edit_doc else '' }}>
+
+    <label for="qr_data">QR Data (JSON-array format)</label>
+    <textarea id="qr_data" name="qr_data"
+      placeholder='e.g. ["CISCE","NAME:PRINCE KUMAR","…"]'
+      >{{ edit_doc.qr_data if edit_doc else '' }}</textarea>
+
+    <button type="submit" class="btn">
+      {{ edit_doc and 'Update Document' or 'Upload Document' }}
+    </button>
     {% if edit_doc %}
-      <a href="{{ url_for('admin') }}">Cancel</a>
+      <a href="{{ url_for('admin') }}" style="margin-left:1rem;">Cancel Edit</a>
     {% endif %}
+
+    <!-- Live QR Preview -->
+    <div id="qr_preview"></div>
   </form>
 
+  <!-- Documents Table -->
   <h2>Existing Documents</h2>
   {% if docs %}
     <table>
       <thead>
         <tr>
-          <th>ID</th>
+          <th>#</th>
           <th>Unique ID</th>
           <th>Name</th>
           <th>Filename</th>
+          <th>QR Data</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -64,10 +103,14 @@
           <td>{{ doc.unique_id }}</td>
           <td>{{ doc.display_name or '-' }}</td>
           <td>{{ doc.filename }}</td>
+          <td style="font-size:12px;">{{ doc.qr_data or '-' }}</td>
           <td class="actions">
             <a href="{{ url_for('admin', edit_id=doc.id) }}">Edit</a>
             <form method="POST" style="display:inline;">
-              <button type="submit" name="delete_id" value="{{ doc.id }}">Delete</button>
+              <button type="submit" name="delete_id" value="{{ doc.id }}"
+                      onclick="return confirm('Delete this document?');">
+                Delete
+              </button>
             </form>
           </td>
         </tr>
@@ -77,5 +120,40 @@
   {% else %}
     <p>No documents uploaded yet.</p>
   {% endif %}
+
+  <!-- QR Code library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    // Generate QR preview whenever the QR textarea changes
+    function renderQR() {
+      const container = document.getElementById("qr_preview");
+      container.innerHTML = "";  // clear
+      const data = document.getElementById("qr_data").value.trim();
+      if (!data) return;
+      try {
+        // If it's JSON, stringify it; else use raw text
+        const parsed = JSON.parse(data);
+        var text = Array.isArray(parsed)
+          ? parsed.join("\\n")
+          : data;
+      } catch {
+        var text = data;
+      }
+      new QRCode(container, {
+        text,
+        width: 128,
+        height: 128,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+      });
+    }
+
+    document.getElementById("qr_data")
+      .addEventListener("input", renderQR);
+
+    // On page load, if edit_doc has qr_data, render it:
+    window.addEventListener("DOMContentLoaded", renderQR);
+  </script>
 </body>
 </html>

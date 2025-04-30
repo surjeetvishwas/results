@@ -1,10 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DigiLocker NAD - CISCE</title>
+  <title>DigiLocker NAD – CISCE</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <style>
+    /* Centered result blocks */
+    .result-area-center { text-align: center; margin-top: 1rem; }
+    /* QR code in white box */
+    .qr-box {
+      display: inline-block;
+      padding: 0.5rem;
+      background: #fff;
+      border-radius: 0.25rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    /* Big green tick */
+    .green-check {
+      display: block;
+      margin: 1rem auto 0;
+      max-width: 80px;
+    }
+    /* Signed box */
+    .signed-box {
+      border:1px solid #ccc;
+      border-radius:4px;
+      padding:1rem;
+      max-width:300px;
+      margin:1rem auto;
+      text-align:center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    /* Note panel */
+    .note-box {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid #eee;
+      max-width: 600px;
+      margin: 2rem auto 1rem;
+      text-align: left;
+      line-height: 1.6;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+  </style>
 </head>
 <body>
 
@@ -35,50 +75,76 @@
     <button class="student-btn">Student</button>
   </header>
 
-  <!-- Main Card + Result -->
+  <!-- Main Content -->
   <main class="container">
-    <div id="main-card" class="card">
-
-      <!-- Hero -->
+    <!-- Hero + Form -->
+    <div id="content-area">
       <div class="hero">
         <img src="{{ url_for('static', filename='img/001447.png') }}"
              alt="CISCE Logo" class="council-logo">
         <h1>Council for the Indian School Certificate Examination (CISCE)</h1>
         <p class="description">
-          CISCE (<a href="https://www.cisceboard.org/" target="_blank">cisceboard.org</a>) is issuing marksheets,
-          passing certificates, and migration certificates through DigiLocker. These can be pulled by students
-          into their DigiLocker accounts. Currently available Marksheets, Passing Certificates, &amp; Migration
-          Certificates of ICSE (Class X) &amp; ISC (Class XII) from the year 2000–2025.
+          CISCE (<a href="https://www.cisceboard.org/" target="_blank">cisceboard.org</a>) issues marksheets,
+          passing certificates, and migration certificates via DigiLocker for ICSE &amp; ISC (2000–2025).
         </p>
       </div>
 
-      <!-- Form -->
       <div class="form-section">
         <h2>Access your document!</h2>
         <input type="text" id="unique-id" placeholder="Unique Id*">
         <div class="note">Enter Your Unique Id</div>
         <button class="submit-btn" onclick="fetchDocument()">
           <img src="{{ url_for('static', filename='img/digilocker-icon.svg') }}"
-               alt="" class="btn-icon">
+               class="btn-icon" alt="">
           Access With DigiLocker MeriPehchaan
         </button>
         <p id="error-msg" class="error hidden">Document not found.</p>
       </div>
+    </div>
 
-      <!-- Bottom Note -->
-      <div class="card-footer-note">
-        <p>We use basic information from your DigiLocker account to identify you and allow access to NAD platform.</p>
-        <p>By continuing, you agree to NAD’s <a href="#">Terms & Conditions</a> and <a href="#">Privacy Policy</a>.</p>
-      </div>
+    <!-- Result Area -->
+    <div id="result-area" class="hidden">
 
-      <!-- Result Area (hidden initially) -->
-      <div id="result-area" class="hidden">
-        <img id="document-img" src="" alt="Your Document" class="document-img"/>
-        <div class="mt-4">
-          <button onclick="resetView()" class="submit-btn">Search Again</button>
+      <!-- 1. Certificate -->
+      <img id="document-img" src="" alt="Your Document" class="document-img"/>
+
+      <!-- 2. QR code -->
+      <div class="result-area-center">
+        <div class="qr-box">
+          <img id="qr-img" src="" alt="QR code to verify" style="max-width:150px;">
         </div>
       </div>
 
+      <!-- 3. Verified badge -->
+      <div class="result-area-center">
+        <img src="{{ url_for('static', filename='img/nad_verified.png') }}"
+             alt="Verified by DigiLocker" style="max-width:120px; margin-top:1rem;">
+      </div>
+
+      <!-- 4. Big green check -->
+      <img src="{{ url_for('static', filename='img/verified.png') }}"
+           alt="Verified" class="green-check">
+
+      <!-- 5. Digitally Signed Box -->
+      <div class="signed-box">
+        <p>Digitally signed by<br>
+        Controller of Examinations<br>
+        Council for the Indian School Certificate Examination</p>
+      </div>
+
+      <!-- 6. Note Panel -->
+      <div class="note-box">
+        <p><strong>Note :-</strong></p>
+        <p>1. This is a digital certificate. The format of this certificate may differ from the document issued by the Board.</p>
+        <p>2. This certificate is electronically generated by DigiLocker – National Academic Depository.</p>
+        <p>3. This digitally signed document is legally valid as per the IT Act 2000 when used electronically.</p>
+        <p>4. To verify this certificate, scan the QR code on the certificate.</p>
+      </div>
+
+      <!-- Back Button -->
+      <div class="result-area-center" style="margin-bottom:2rem;">
+        <button onclick="resetView()" class="submit-btn">Search Again</button>
+      </div>
     </div>
   </main>
 
@@ -86,11 +152,10 @@
   <footer class="footer">
     <div class="footer-top">
       <div class="ft-about">
-        <img src="{{ url_for('static', filename='img/NAD Logo White.png') }}"
-             alt="DigiLocker NAD" class="ft-logo">
+        <img src="{{ url_for('static', filename='img/NAD Logo White.png') }}" alt="DigiLocker NAD" class="ft-logo">
         <p>
-          DigiLocker and NAD are initiatives of Ministry of Electronics and Information
-          Technology (MeitY) and Ministry of Human Resource Development (MHRD) respectively.
+          DigiLocker and NAD are initiatives of Ministry of Electronics and Information Technology (MeitY)
+          and Ministry of Human Resource Development (MHRD) respectively.
         </p>
       </div>
       <div class="ft-links">
@@ -109,8 +174,7 @@
       </div>
       <div class="ft-powered">
         <h4>Powered by</h4>
-        <img src="{{ url_for('static', filename='img/Digital India Logo White.png') }}"
-             alt="Digital India">
+        <img src="{{ url_for('static', filename='img/Digital India Logo White.png') }}" alt="Digital India">
         <p>
           Digital India Corporation (DIC)<br>
           Ministry of Electronics & IT (MeitY)<br>
@@ -134,20 +198,21 @@
       err.classList.add('hidden');
 
       fetch(`/api/get-document/${uid}`)
-        .then(res => {
-          if (!res.ok) throw new Error();
-          return res.json();
-        })
+        .then(res => { if (!res.ok) throw new Error(); return res.json(); })
         .then(data => {
-          // hide hero, form, and bottom note
-          document.querySelector('#main-card .hero').classList.add('hidden');
-          document.querySelector('#main-card .form-section').classList.add('hidden');
-          document.querySelector('#main-card .card-footer-note').classList.add('hidden');
-
-          // show result area
-          const img = document.getElementById('document-img');
-          img.src = data.imageUrl;
+          // Show certificate
+          document.getElementById('document-img').src = data.imageUrl;
+          // Toggle views
+          document.getElementById('content-area').classList.add('hidden');
           document.getElementById('result-area').classList.remove('hidden');
+
+          // Fetch QR code
+          fetch(`/api/get-qr/${uid}`)
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+            .then(q => {
+              document.getElementById('qr-img').src = q.qr_png;
+            })
+            .catch(() => console.warn('No QR data available'));
         })
         .catch(() => {
           err.classList.remove('hidden');
@@ -155,12 +220,9 @@
     }
 
     function resetView() {
-      document.getElementById('result-area').classList.add('hidden');
-      document.querySelector('#main-card .hero').classList.remove('hidden');
-      document.querySelector('#main-card .form-section').classList.remove('hidden');
-      document.querySelector('#main-card .card-footer-note').classList.remove('hidden');
       document.getElementById('unique-id').value = '';
-      document.getElementById('error-msg').classList.add('hidden');
+      document.getElementById('result-area').classList.add('hidden');
+      document.getElementById('content-area').classList.remove('hidden');
     }
   </script>
 </body>
