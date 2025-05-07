@@ -5,7 +5,7 @@ import qrcode
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify, send_from_directory
+    session, flash, jsonify
 )
 from flask_sqlalchemy import SQLAlchemy
 from google.cloud import storage
@@ -16,12 +16,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24))
 
 # SQLite DB file locally
-DB_FILENAME    = 'mapping.db'
-LOCAL_DB_PATH  = os.path.join(app.root_path, DB_FILENAME)
+DB_FILENAME   = 'mapping.db'
+LOCAL_DB_PATH = os.path.join(app.root_path, DB_FILENAME)
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{LOCAL_DB_PATH}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Documents folder locally
+# Documents folder locally (for temp uploads)
 DOC_FOLDER = os.path.join(app.root_path, 'documents')
 os.makedirs(DOC_FOLDER, exist_ok=True)
 app.config['DOCUMENT_FOLDER'] = DOC_FOLDER
@@ -36,6 +36,15 @@ DOC_PREFIX      = 'documents/'
 db = SQLAlchemy(app)
 
 
+# ==== MODEL ====  — define *before* create_all()
+class Document(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    unique_id    = db.Column(db.String(80), unique=True, nullable=False)
+    display_name = db.Column(db.String(200), nullable=True)
+    filename     = db.Column(db.String(200), nullable=False)
+    qr_data      = db.Column(db.Text, nullable=True)
+
+
 # ==== GCS SYNC HELPERS ====
 
 def download_db():
@@ -46,15 +55,6 @@ def download_db():
 def upload_db():
     DB_BLOB.upload_from_filename(LOCAL_DB_PATH)
     app.logger.info("Uploaded mapping.db to GCS")
-
-def download_documents():
-    blobs = storage_client.list_blobs(GCS_BUCKET_NAME, prefix=DOC_PREFIX)
-    for blob in blobs:
-        fn = os.path.basename(blob.name)
-        if fn:
-            dest = os.path.join(DOC_FOLDER, fn)
-            blob.download_to_filename(dest)
-            app.logger.info(f"Downloaded document {fn} from GCS")
 
 def upload_document(fn):
     local_path = os.path.join(DOC_FOLDER, fn)
@@ -71,20 +71,9 @@ def delete_document_blob(fn):
 # ==== INITIAL SYNC ON STARTUP ====
 
 with app.app_context():
-    download_db()
-    db.create_all()
-    upload_db()
-   
-
-
-# ==== MODEL ====
-
-class Document(db.Model):
-    id           = db.Column(db.Integer, primary_key=True)
-    unique_id    = db.Column(db.String(80), unique=True, nullable=False)
-    display_name = db.Column(db.String(200), nullable=True)
-    filename     = db.Column(db.String(200), nullable=False)
-    qr_data      = db.Column(db.Text, nullable=True)
+    download_db()    # pull existing mapping.db
+    db.create_all()  # create tables for Document
+    upload_db()      # push fresh mapping.db if newly created
 
 
 # ==== AUTH DECORATOR ====
@@ -111,12 +100,12 @@ def get_document(unique_id):
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
-    return jsonify({'imageUrl': url_for('serve_document', filename=doc.filename)})
-
-
-@app.route('/documents/<path:filename>')
-def serve_document(filename):
-    return send_from_directory(app.config['DOCUMENT_FOLDER'], filename)
+    # Serve from GCS via signed URL (valid 1h)
+    signed_url = bucket.blob(f"{DOC_PREFIX}{doc.filename}") \
+                      .generate_signed_url(version="v4",
+                                           expiration=3600,
+                                           method="GET")
+    return jsonify({'imageUrl': signed_url})
 
 
 @app.route('/api/get-qr/<string:unique_id>')
@@ -159,12 +148,12 @@ def admin():
     message = ''
     edit_doc = None
 
-    if request.method == 'POST':
+    if request.method == 'POST'):
         # DELETE
         if 'delete_id' in request.form:
             doc = db.session.get(Document, int(request.form['delete_id']))
             if doc:
-                # delete local + GCS
+                # delete local file, GCS blob, DB record
                 try:
                     os.remove(os.path.join(DOC_FOLDER, doc.filename))
                 except FileNotFoundError:
@@ -186,6 +175,7 @@ def admin():
             message = 'Unique ID is required.'
         else:
             if edit_id:
+                # UPDATE
                 doc = db.session.get(Document, int(edit_id))
                 if doc:
                     doc.unique_id    = uid
@@ -203,6 +193,7 @@ def admin():
                 else:
                     message = 'Document not found for editing.'
             else:
+                # CREATE
                 if not f:
                     message = 'File is required for new upload.'
                 else:
@@ -223,8 +214,9 @@ def admin():
     if 'edit_id' in request.args:
         edit_doc = db.session.get(Document, int(request.args['edit_id']))
 
+    # Search/filter
     search = request.args.get('search','').strip()
-    query = Document.query
+    query  = Document.query
     if search:
         like = f"%{search}%"
         query = query.filter(
