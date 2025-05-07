@@ -100,7 +100,6 @@ def get_document(unique_id):
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
-    # Serve from GCS via signed URL (valid 1h)
     signed_url = bucket.blob(f"{DOC_PREFIX}{doc.filename}") \
                       .generate_signed_url(version="v4",
                                            expiration=3600,
@@ -148,12 +147,11 @@ def admin():
     message = ''
     edit_doc = None
 
-    if request.method == 'POST'):
+    if request.method == 'POST':
         # DELETE
         if 'delete_id' in request.form:
             doc = db.session.get(Document, int(request.form['delete_id']))
             if doc:
-                # delete local file, GCS blob, DB record
                 try:
                     os.remove(os.path.join(DOC_FOLDER, doc.filename))
                 except FileNotFoundError:
@@ -175,7 +173,6 @@ def admin():
             message = 'Unique ID is required.'
         else:
             if edit_id:
-                # UPDATE
                 doc = db.session.get(Document, int(edit_id))
                 if doc:
                     doc.unique_id    = uid
@@ -193,7 +190,6 @@ def admin():
                 else:
                     message = 'Document not found for editing.'
             else:
-                # CREATE
                 if not f:
                     message = 'File is required for new upload.'
                 else:
