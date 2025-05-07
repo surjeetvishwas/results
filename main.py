@@ -74,7 +74,7 @@ with app.app_context():
     download_db()
     db.create_all()
     upload_db()
-    download_documents()
+   
 
 
 # ==== MODEL ====
