@@ -35,8 +35,7 @@ DOC_PREFIX      = 'documents/'
 
 db = SQLAlchemy(app)
 
-
-# ==== MODEL ====  — define *before* create_all()
+# ==== MODEL ====
 class Document(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
     unique_id    = db.Column(db.String(80), unique=True, nullable=False)
@@ -44,9 +43,7 @@ class Document(db.Model):
     filename     = db.Column(db.String(200), nullable=False)
     qr_data      = db.Column(db.Text, nullable=True)
 
-
 # ==== GCS SYNC HELPERS ====
-
 def download_db():
     if DB_BLOB.exists():
         DB_BLOB.download_to_filename(LOCAL_DB_PATH)
@@ -67,17 +64,13 @@ def delete_document_blob(fn):
     blob.delete(if_exists=True)
     app.logger.info(f"Deleted document {fn} from GCS")
 
-
 # ==== INITIAL SYNC ON STARTUP ====
-
 with app.app_context():
-    download_db()    # pull existing mapping.db
-    db.create_all()  # create tables for Document
-    upload_db()      # push fresh mapping.db if newly created
-
+    download_db()
+    db.create_all()
+    upload_db()
 
 # ==== AUTH DECORATOR ====
-
 def login_required(fn):
     from functools import wraps
     @wraps(fn)
@@ -87,16 +80,14 @@ def login_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
-
 # ==== PUBLIC ROUTES ====
-
 @app.route('/')
 def index():
     return render_template('index.html')
 
-
 @app.route('/api/get-document/<string:unique_id>')
 def get_document(unique_id):
+    download_db()  # Ensure up-to-date DB
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
@@ -106,9 +97,9 @@ def get_document(unique_id):
                                            method="GET")
     return jsonify({'imageUrl': signed_url})
 
-
 @app.route('/api/get-qr/<string:unique_id>')
 def get_qr(unique_id):
+    download_db()  # Ensure up-to-date DB
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc or not doc.qr_data:
         return ('', 404)
@@ -118,9 +109,7 @@ def get_qr(unique_id):
     data_uri = base64.b64encode(buf.getvalue()).decode()
     return jsonify({'qr_png': f"data:image/png;base64,{data_uri}"})
 
-
 # ==== AUTH ROUTES ====
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -131,16 +120,13 @@ def login():
         flash('Invalid credentials', 'error')
     return render_template('login.html')
 
-
 @app.route('/logout')
 @login_required
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-
 # ==== ADMIN PANEL ====
-
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 def admin():
@@ -228,6 +214,6 @@ def admin():
         message=message, search=search
     )
 
-
+# ==== LOCAL DEV ONLY ====
 if __name__ == '__main__':
     app.run(debug=True)
