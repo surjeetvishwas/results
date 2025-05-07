@@ -26,7 +26,7 @@ DOC_FOLDER = os.path.join(app.root_path, 'documents')
 os.makedirs(DOC_FOLDER, exist_ok=True)
 app.config['DOCUMENT_FOLDER'] = DOC_FOLDER
 
-# GCS setup (hard-coded bucket name: resultexyx)
+# GCS setup (public bucket: resultexyx)
 GCS_BUCKET_NAME = 'resultexyx'
 storage_client  = storage.Client()
 bucket          = storage_client.bucket(GCS_BUCKET_NAME)
@@ -91,15 +91,13 @@ def get_document(unique_id):
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
-    signed_url = bucket.blob(f"{DOC_PREFIX}{doc.filename}") \
-                      .generate_signed_url(version="v4",
-                                           expiration=3600,
-                                           method="GET")
-    return jsonify({'imageUrl': signed_url})
+    # Public URL for a public bucket
+    public_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
+    return jsonify({'imageUrl': public_url})
 
 @app.route('/api/get-qr/<string:unique_id>')
 def get_qr(unique_id):
-    download_db()  # Ensure up-to-date DB
+    download_db()
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc or not doc.qr_data:
         return ('', 404)
