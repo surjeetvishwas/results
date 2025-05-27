@@ -9,6 +9,7 @@ from flask import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from google.cloud import storage
+from google.api_core.exceptions import NotFound
 from werkzeug.utils import secure_filename
 
 # ==== CONFIG ====
@@ -61,8 +62,11 @@ def upload_document(fn):
 
 def delete_document_blob(fn):
     blob = bucket.blob(f"{DOC_PREFIX}{fn}")
-    blob.delete(if_exists=True)
-    app.logger.info(f"Deleted document {fn} from GCS")
+    try:
+        blob.delete()
+        app.logger.info(f"Deleted document {fn} from GCS")
+    except NotFound:
+        app.logger.warning(f"Document {fn} not found in GCS during delete")
 
 # ==== INITIAL SYNC ON STARTUP ====
 with app.app_context():
@@ -87,11 +91,10 @@ def index():
 
 @app.route('/api/get-document/<string:unique_id>')
 def get_document(unique_id):
-    download_db()  # Ensure up-to-date DB
+    download_db()
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
-    # Public URL for a public bucket
     public_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
     return jsonify({'imageUrl': public_url})
 
@@ -194,7 +197,6 @@ def admin():
     if 'edit_id' in request.args:
         edit_doc = db.session.get(Document, int(request.args['edit_id']))
 
-    # Search/filter
     search = request.args.get('search','').strip()
     query  = Document.query
     if search:
