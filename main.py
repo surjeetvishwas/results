@@ -27,8 +27,8 @@ DOC_FOLDER = os.path.join(app.root_path, 'documents')
 os.makedirs(DOC_FOLDER, exist_ok=True)
 app.config['DOCUMENT_FOLDER'] = DOC_FOLDER
 
-# GCS setup (public bucket: resultexyx)
-GCS_BUCKET_NAME = 'resultexyx'
+# GCS setup (public bucket: resultxxxx)
+GCS_BUCKET_NAME = 'resultxxxx'
 storage_client  = storage.Client()
 bucket          = storage_client.bucket(GCS_BUCKET_NAME)
 DB_BLOB         = bucket.blob(DB_FILENAME)
@@ -180,19 +180,24 @@ def admin():
                 if not f:
                     message = 'File is required for new upload.'
                 else:
-                    fn = secure_filename(f.filename)
-                    f.save(os.path.join(DOC_FOLDER, fn))
-                    upload_document(fn)
-                    new_doc = Document(
-                        unique_id=uid,
-                        display_name=name,
-                        filename=fn,
-                        qr_data=qrdata
-                    )
-                    db.session.add(new_doc)
-                    db.session.commit()
-                    upload_db()
-                    return redirect(url_for('admin'))
+                    # Check if unique_id already exists
+                    existing_doc = Document.query.filter_by(unique_id=uid).first()
+                    if existing_doc:
+                        message = f'Unique ID "{uid}" already exists. Please use a different ID or edit the existing document.'
+                    else:
+                        fn = secure_filename(f.filename)
+                        f.save(os.path.join(DOC_FOLDER, fn))
+                        upload_document(fn)
+                        new_doc = Document(
+                            unique_id=uid,
+                            display_name=name,
+                            filename=fn,
+                            qr_data=qrdata
+                        )
+                        db.session.add(new_doc)
+                        db.session.commit()
+                        upload_db()
+                        return redirect(url_for('admin'))
 
     if 'edit_id' in request.args:
         edit_doc = db.session.get(Document, int(request.args['edit_id']))
