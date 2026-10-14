@@ -146,8 +146,8 @@ def serve_document(filename):
         except Exception as e:
             app.logger.warning(f"Error streaming document from GCS: {e}")
 
-    # 3. Fallback: redirect if streaming unavailable
-    return redirect(f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{filename}")
+    # 3. If file not found in local storage or GCS, return 404 on website
+    return ("Document image file not found on server.", 404)
 
 @app.route('/document/<string:unique_id>')
 def view_document_direct(unique_id):
