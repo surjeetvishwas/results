@@ -232,11 +232,56 @@ def logout():
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 def admin():
-    message = ''
+    message = request.args.get('message', '')
     edit_doc = None
+    generated_doc = None
+
+    if 'generated_id' in request.args:
+        generated_doc = Document.query.filter_by(unique_id=request.args['generated_id']).first()
 
     if request.method == 'POST':
-        # DELETE
+        # 1. QUICK IMAGE TO QR GENERATOR (Upload any image -> get scanable QR)
+        if 'quick_upload' in request.form:
+            f = request.files.get('quick_image')
+            if not f or not f.filename:
+                message = 'Please select an image file to upload.'
+            else:
+                custom_id = request.form.get('quick_id', '').strip()
+                if custom_id:
+                    uid = custom_id
+                    existing = Document.query.filter_by(unique_id=uid).first()
+                    if existing:
+                        return redirect(url_for('admin', message=f'Unique ID "{uid}" already exists. Please choose a different ID or leave blank to auto-generate.'))
+                else:
+                    import random
+                    uid = str(random.randint(1000000, 9999999))
+                    while Document.query.filter_by(unique_id=uid).first():
+                        uid = str(random.randint(1000000, 9999999))
+
+                title = request.form.get('quick_title', '').strip() or f"Document {uid}"
+                raw_fn = secure_filename(f.filename) or f"{uid}.jpg"
+
+                # Check filename collisions
+                fn = raw_fn
+                if os.path.exists(os.path.join(DOC_FOLDER, fn)):
+                    fn = f"{uid}_{raw_fn}"
+
+                local_path = os.path.join(DOC_FOLDER, fn)
+                f.save(local_path)
+                upload_document(fn)
+
+                new_doc = Document(
+                    unique_id=uid,
+                    display_name=title,
+                    filename=fn,
+                    qr_data=None  # Auto-points to: https://<domain>/documents/<filename>
+                )
+                db.session.add(new_doc)
+                db.session.commit()
+                upload_db()
+                return redirect(url_for('admin', generated_id=uid))
+
+        # 2. DELETE
         if 'delete_id' in request.form:
             doc = db.session.get(Document, int(request.form['delete_id']))
             if doc:
@@ -250,7 +295,7 @@ def admin():
                 upload_db()
             return redirect(url_for('admin'))
 
-        # CREATE / UPDATE
+        # 3. CREATE / UPDATE (MANUAL STUDENT RECORD)
         uid     = request.form.get('unique_id','').strip()
         name    = request.form.get('display_name','').strip()
         qrdata  = request.form.get('qr_data','').strip()
@@ -317,6 +362,7 @@ def admin():
 
     return render_template('admin.html',
         docs=docs, edit_doc=edit_doc,
+        generated_doc=generated_doc,
         message=message, search=search
     )
 

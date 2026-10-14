@@ -117,6 +117,59 @@
     .modal-close:hover {
       color: #000;
     }
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 0;
+    }
+    .tab-btn {
+      background: #e9ecef;
+      border: 1px solid #ccc;
+      border-bottom: none;
+      padding: 0.75rem 1.25rem;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      color: #555;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: #fff;
+      color: #0052cc;
+      border-color: #0052cc #0052cc #fff #0052cc;
+      border-width: 2px 2px 2px 2px;
+      margin-bottom: -2px;
+    }
+    .tab-content {
+      background: #fff;
+      padding: 1.5rem;
+      border: 1px solid #ccc;
+      border-radius: 0 0 6px 6px;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .tab-content.hidden {
+      display: none;
+    }
+
+    /* Success Generated Box */
+    .generated-box {
+      background: #e8f5e9;
+      border: 2px solid #28a745;
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.15);
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
@@ -125,49 +178,145 @@
   <div style="clear: both;"></div>
 
   {% if message %}
-    <p class="{{ 'error' if 'required' in message else 'message' }}">{{ message }}</p>
+    <p class="{{ 'error' if 'required' in message or 'exists' in message else 'message' }}">{{ message }}</p>
   {% endif %}
 
-  <!-- Search Form -->
-  <form method="GET" class="search-form">
-    <label for="search">Search Documents</label>
-    <input type="text" id="search" name="search" value="{{ search }}" placeholder="by Unique ID or Name">
-    <button type="submit">Search</button>
-  </form>
+  <!-- Generated QR Success Banner -->
+  {% if generated_doc %}
+    <div class="generated-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.5rem;">
+        <div style="flex: 1; min-width: 280px;">
+          <h2 style="margin: 0 0 0.5rem; color: #155724; font-size: 1.35rem;">
+            🎉 QR Code Generated & Ready!
+          </h2>
+          <p style="margin: 0.35rem 0; font-size: 14px;">
+            <strong>Title:</strong> {{ generated_doc.display_name }} | 
+            <strong>Unique ID:</strong> <code>{{ generated_doc.unique_id }}</code>
+          </p>
+          <p style="margin: 0.35rem 0; font-size: 14px; word-break: break-all;">
+            <strong>Scan Destination URL:</strong><br>
+            <a href="{{ url_for('serve_document', filename=generated_doc.filename) }}" target="_blank" style="color: #0078d7; font-weight: bold; text-decoration: underline;">
+              {{ request.host_url.rstrip('/') }}/documents/{{ generated_doc.filename }}
+            </a>
+          </p>
+          <p style="font-size: 13px; color: #555; margin: 0.5rem 0 1rem;">
+            📱 <em>Scan this QR code with any phone camera to view the uploaded image directly on your website.</em>
+          </p>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="{{ url_for('serve_qr_png', unique_id=generated_doc.unique_id) }}?download=1" 
+               class="btn" 
+               style="background:#28a745; text-decoration:none; padding:0.5rem 1rem; margin-top:0;"
+               download="{{ generated_doc.unique_id }}_qr.png">
+              ⬇ Download QR PNG
+            </a>
+            <a href="{{ url_for('serve_document', filename=generated_doc.filename) }}" 
+               target="_blank" 
+               class="btn" 
+               style="background:#0078d7; text-decoration:none; padding:0.5rem 1rem; margin-top:0;">
+              👁 View Image
+            </a>
+            <button type="button" 
+                    class="btn" 
+                    style="background:#6c757d; padding:0.5rem 1rem; margin-top:0;" 
+                    onclick="navigator.clipboard.writeText('{{ request.host_url.rstrip('/') }}/documents/{{ generated_doc.filename }}'); alert('Image URL copied to clipboard!');">
+              📋 Copy Link
+            </button>
+            <a href="{{ url_for('admin') }}" class="btn" style="background:#555; text-decoration:none; padding:0.5rem 1rem; margin-top:0;">
+              ✕ Dismiss
+            </a>
+          </div>
+        </div>
+        <div style="text-align: center;">
+          <a href="{{ url_for('serve_qr_png', unique_id=generated_doc.unique_id) }}" target="_blank" title="Click to view full size">
+            <img src="{{ url_for('serve_qr_png', unique_id=generated_doc.unique_id) }}" 
+                 alt="Generated QR" 
+                 style="width: 180px; height: 180px; border: 2px solid #28a745; border-radius: 8px; padding: 4px; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.15);">
+          </a>
+          <div style="font-size: 11px; color: #555; margin-top: 4px;">Click image to enlarge</div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
-  <!-- Upload / Edit Form -->
-  <form method="POST" enctype="multipart/form-data" id="doc-form">
-    {% if edit_doc %}
-      <input type="hidden" name="doc_id" value="{{ edit_doc.id }}">
-    {% endif %}
-
-    <label for="unique_id">Unique ID<span style="color:red;">*</span></label>
-    <input type="text" id="unique_id" name="unique_id"
-           value="{{ edit_doc.unique_id if edit_doc else '' }}" required>
-
-    <label for="display_name">Display Name</label>
-    <input type="text" id="display_name" name="display_name"
-           value="{{ edit_doc.display_name if edit_doc else '' }}">
-
-    <label for="file">File {% if edit_doc %}(leave blank to keep existing){% endif %}</label>
-    <input type="file" id="file" name="file" accept="image/*"
-           {{ 'required' if not edit_doc else '' }}>
-
-    <label for="qr_data">QR Target / Data (Optional - leave blank to auto-link to certificate image)</label>
-    <textarea id="qr_data" name="qr_data"
-      placeholder='Leave blank to automatically link QR to the result image, or enter custom URL'
-      >{{ edit_doc.qr_data if edit_doc else '' }}</textarea>
-
-    <button type="submit" class="btn">
-      {{ edit_doc and 'Update Document' or 'Upload Document' }}
+  <!-- Tab Buttons -->
+  <div class="tab-bar">
+    <button type="button" id="tabbtn-quick" class="tab-btn {{ 'active' if not edit_doc else '' }}" onclick="switchTab('quick')">
+      ⚡ Quick Image to QR Generator
     </button>
-    {% if edit_doc %}
-      <a href="{{ url_for('admin') }}" style="margin-left:1rem;">Cancel Edit</a>
-    {% endif %}
+    <button type="button" id="tabbtn-manual" class="tab-btn {{ 'active' if edit_doc else '' }}" onclick="switchTab('manual')">
+      📝 {{ 'Edit Document' if edit_doc else 'Manual Student Record Entry' }}
+    </button>
+  </div>
 
-    <!-- Live QR Preview -->
-    <div id="qr_preview"></div>
-  </form>
+  <!-- TAB 1: QUICK IMAGE TO QR GENERATOR -->
+  <div id="tab-quick" class="tab-content {{ 'hidden' if edit_doc else '' }}">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="quick_upload" value="1">
+      
+      <div style="background:#eef6fc; border-left:4px solid #0078d7; padding:0.75rem 1rem; border-radius:4px; margin-bottom:1.25rem;">
+        <strong style="color:#0052cc;">⚡ Quick Upload & Scan:</strong>
+        Upload any image below. A QR code will be generated instantly. Scanning it with any mobile phone camera opens and displays the uploaded image directly on your website URL.
+      </div>
+
+      <label for="quick_image">Select Image File <span style="color:red;">*</span></label>
+      <input type="file" id="quick_image" name="quick_image" accept="image/*" required 
+             style="border: 2px dashed #0078d7; padding: 1.25rem; background: #fdfdfd; border-radius: 6px; cursor: pointer;">
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+        <div>
+          <label for="quick_title">Label / Student Name (Optional)</label>
+          <input type="text" id="quick_title" name="quick_title" placeholder="e.g. Gurmeet Marksheet, Result 2026, or leave blank">
+        </div>
+        <div>
+          <label for="quick_id">Unique ID (Optional - auto-generated if blank)</label>
+          <input type="text" id="quick_id" name="quick_id" placeholder="Leave blank to auto-generate a 7-digit ID">
+        </div>
+      </div>
+
+      <button type="submit" class="btn" style="background:#28a745; font-size:15px; padding:0.75rem 1.5rem; margin-top:1.25rem; width:100%; font-weight:bold; cursor:pointer;">
+        🚀 Upload Image & Generate QR Code
+      </button>
+    </form>
+  </div>
+
+  <!-- TAB 2: MANUAL / EDIT DOCUMENT ENTRY -->
+  <div id="tab-manual" class="tab-content {{ 'hidden' if not edit_doc else '' }}">
+    <form method="POST" enctype="multipart/form-data" id="doc-form">
+      {% if edit_doc %}
+        <input type="hidden" name="doc_id" value="{{ edit_doc.id }}">
+        <div style="background:#fff3cd; border-left:4px solid #ffc107; padding:0.5rem 1rem; margin-bottom:1rem; border-radius:4px;">
+          Editing document: <strong>{{ edit_doc.display_name or edit_doc.unique_id }}</strong> (ID: {{ edit_doc.unique_id }})
+        </div>
+      {% endif %}
+
+      <label for="unique_id">Unique ID<span style="color:red;">*</span></label>
+      <input type="text" id="unique_id" name="unique_id"
+             value="{{ edit_doc.unique_id if edit_doc else '' }}" required>
+
+      <label for="display_name">Display Name</label>
+      <input type="text" id="display_name" name="display_name"
+             value="{{ edit_doc.display_name if edit_doc else '' }}">
+
+      <label for="file">File {% if edit_doc %}(leave blank to keep existing){% endif %}</label>
+      <input type="file" id="file" name="file" accept="image/*"
+             {{ 'required' if not edit_doc else '' }}>
+
+      <label for="qr_data">QR Target / Data (Optional - leave blank to auto-link to certificate image)</label>
+      <textarea id="qr_data" name="qr_data"
+        placeholder='Leave blank to automatically link QR to the result image, or enter custom URL'
+        >{{ edit_doc.qr_data if edit_doc else '' }}</textarea>
+
+      <button type="submit" class="btn">
+        {{ edit_doc and 'Update Document' or 'Upload Document' }}
+      </button>
+      {% if edit_doc %}
+        <a href="{{ url_for('admin') }}" style="margin-left:1rem;">Cancel Edit</a>
+      {% endif %}
+
+      <!-- Live QR Preview -->
+      <div id="qr_preview"></div>
+    </form>
+  </div>
 
   <!-- Documents Table -->
   <h2>Existing Documents</h2>
@@ -286,10 +435,21 @@
       });
     }
 
-    document.getElementById("qr_data")
-      .addEventListener("input", renderQR);
+    const qrDataEl = document.getElementById("qr_data");
+    if (qrDataEl) {
+      qrDataEl.addEventListener("input", renderQR);
+      window.addEventListener("DOMContentLoaded", renderQR);
+    }
 
-    window.addEventListener("DOMContentLoaded", renderQR);
+    // Tab switcher
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      const content = document.getElementById('tab-' + tabName);
+      const btn = document.getElementById('tabbtn-' + tabName);
+      if (content) content.classList.remove('hidden');
+      if (btn) btn.classList.add('active');
+    }
 
     // Modal popup handlers
     function showQRModal(uid, name, qrUrl) {
