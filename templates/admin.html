@@ -191,7 +191,7 @@
           <td><strong>{{ doc.unique_id }}</strong></td>
           <td>{{ doc.display_name or '-' }}</td>
           <td>
-            <a href="https://storage.googleapis.com/resultxxxx/documents/{{ doc.filename }}" target="_blank" style="color:#0078d7; text-decoration:none;" title="Open raw image in GCS">
+            <a href="{{ url_for('serve_document', filename=doc.filename) }}" target="_blank" style="color:#0078d7; text-decoration:none;" title="Open document on your website">
               {{ doc.filename }} ↗
             </a>
           </td>

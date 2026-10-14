@@ -106,10 +106,48 @@ def login_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
+# ==== HELPERS ====
+def get_base_url():
+    base = os.environ.get('BASE_URL')
+    if base:
+        return base.rstrip('/')
+    proto = request.headers.get('X-Forwarded-Proto', request.scheme)
+    host = request.headers.get('X-Forwarded-Host', request.host)
+    return f"{proto}://{host}"
+
 # ==== PUBLIC ROUTES ====
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/documents/<path:filename>')
+def serve_document(filename):
+    # 1. Check local documents directory
+    local_path = os.path.join(DOC_FOLDER, filename)
+    if os.path.exists(local_path):
+        return send_file(local_path)
+
+    # 2. Proxy/stream directly from GCS so storage.googleapis.com is NEVER shown
+    if bucket:
+        try:
+            blob = bucket.blob(f"{DOC_PREFIX}{filename}")
+            if blob.exists():
+                buf = io.BytesIO()
+                blob.download_to_file(buf)
+                buf.seek(0)
+                # Cache locally for high performance
+                try:
+                    with open(local_path, 'wb') as f:
+                        f.write(buf.getvalue())
+                except Exception:
+                    pass
+                content_type = blob.content_type or 'image/jpeg'
+                return send_file(buf, mimetype=content_type)
+        except Exception as e:
+            app.logger.warning(f"Error streaming document from GCS: {e}")
+
+    # 3. Fallback: redirect if streaming unavailable
+    return redirect(f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{filename}")
 
 @app.route('/document/<string:unique_id>')
 def view_document_direct(unique_id):
@@ -117,8 +155,7 @@ def view_document_direct(unique_id):
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
-    public_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
-    return redirect(public_url)
+    return redirect(url_for('serve_document', filename=doc.filename))
 
 @app.route('/api/get-document/<string:unique_id>')
 def get_document(unique_id):
@@ -126,8 +163,8 @@ def get_document(unique_id):
     doc = Document.query.filter_by(unique_id=unique_id).first()
     if not doc:
         return jsonify({'error': 'Document not found'}), 404
-    public_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
-    return jsonify({'imageUrl': public_url})
+    doc_url = f"{get_base_url()}/documents/{doc.filename}"
+    return jsonify({'imageUrl': doc_url})
 
 @app.route('/api/get-qr/<string:unique_id>')
 def get_qr(unique_id):
@@ -136,11 +173,11 @@ def get_qr(unique_id):
     if not doc:
         return ('', 404)
 
-    # When scanned with phone camera, direct to raw certificate image
+    # When scanned with phone camera, direct to your website URL: https://<domain>/documents/<filename>
     if doc.qr_data and (doc.qr_data.startswith('http://') or doc.qr_data.startswith('https://')):
         target_url = doc.qr_data
     else:
-        target_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
+        target_url = f"{get_base_url()}/documents/{doc.filename}"
 
     qr_img = qrcode.make(target_url)
     buf = io.BytesIO()
@@ -161,7 +198,7 @@ def serve_qr_png(unique_id):
     if doc.qr_data and (doc.qr_data.startswith('http://') or doc.qr_data.startswith('https://')):
         target_url = doc.qr_data
     else:
-        target_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
+        target_url = f"{get_base_url()}/documents/{doc.filename}"
 
     qr_img = qrcode.make(target_url)
     buf = io.BytesIO()
