@@ -111,7 +111,9 @@
       <!-- 2. QR code -->
       <div class="result-area-center">
         <div class="qr-box">
-          <img id="qr-img" src="" alt="QR code to verify" style="max-width:150px;">
+          <a id="qr-link" href="#" target="_blank" title="Scan with phone or click to view raw certificate">
+            <img id="qr-img" src="" alt="QR code to verify" style="max-width:150px; display:block;">
+          </a>
         </div>
       </div>
 
@@ -197,7 +199,11 @@
       const err = document.getElementById('error-msg');
       err.classList.add('hidden');
 
-      fetch(`/api/get-document/${uid}`)
+      if (!uid) {
+        return;
+      }
+
+      fetch(`/api/get-document/${encodeURIComponent(uid)}`)
         .then(res => { if (!res.ok) throw new Error(); return res.json(); })
         .then(data => {
           // Show certificate
@@ -206,11 +212,20 @@
           document.getElementById('content-area').classList.add('hidden');
           document.getElementById('result-area').classList.remove('hidden');
 
+          // Update URL query string
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('id', uid);
+          window.history.replaceState({}, '', newUrl.toString());
+
           // Fetch QR code
-          fetch(`/api/get-qr/${uid}`)
+          fetch(`/api/get-qr/${encodeURIComponent(uid)}`)
             .then(r => { if (!r.ok) throw new Error(); return r.json(); })
             .then(q => {
               document.getElementById('qr-img').src = q.qr_png;
+              const qrLink = document.getElementById('qr-link');
+              if (qrLink && q.target_url) {
+                qrLink.href = q.target_url;
+              }
             })
             .catch(() => console.warn('No QR data available'));
         })
@@ -223,7 +238,31 @@
       document.getElementById('unique-id').value = '';
       document.getElementById('result-area').classList.add('hidden');
       document.getElementById('content-area').classList.remove('hidden');
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('id');
+      newUrl.searchParams.delete('uid');
+      window.history.replaceState({}, '', newUrl.pathname);
     }
+
+    // Auto-search if ?id= is in query string & listen for Enter key
+    window.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('unique-id');
+      if (input) {
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            fetchDocument();
+          }
+        });
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const queryId = params.get('id') || params.get('uid');
+      if (queryId && input) {
+        input.value = queryId;
+        fetchDocument();
+      }
+    });
   </script>
 </body>
 </html>

@@ -29,10 +29,17 @@ app.config['DOCUMENT_FOLDER'] = DOC_FOLDER
 
 # GCS setup (public bucket: resultxxxx)
 GCS_BUCKET_NAME = 'resultxxxx'
-storage_client  = storage.Client()
-bucket          = storage_client.bucket(GCS_BUCKET_NAME)
-DB_BLOB         = bucket.blob(DB_FILENAME)
 DOC_PREFIX      = 'documents/'
+storage_client  = None
+bucket          = None
+DB_BLOB         = None
+
+try:
+    storage_client = storage.Client()
+    bucket         = storage_client.bucket(GCS_BUCKET_NAME)
+    DB_BLOB        = bucket.blob(DB_FILENAME)
+except Exception as e:
+    app.logger.warning(f"GCS client init note: {e}")
 
 db = SQLAlchemy(app)
 
@@ -46,27 +53,42 @@ class Document(db.Model):
 
 # ==== GCS SYNC HELPERS ====
 def download_db():
-    if DB_BLOB.exists():
-        DB_BLOB.download_to_filename(LOCAL_DB_PATH)
-        app.logger.info("Downloaded mapping.db from GCS")
+    if DB_BLOB:
+        try:
+            if DB_BLOB.exists():
+                DB_BLOB.download_to_filename(LOCAL_DB_PATH)
+                app.logger.info("Downloaded mapping.db from GCS")
+        except Exception as e:
+            app.logger.warning(f"Could not download DB from GCS: {e}")
 
 def upload_db():
-    DB_BLOB.upload_from_filename(LOCAL_DB_PATH)
-    app.logger.info("Uploaded mapping.db to GCS")
+    if DB_BLOB:
+        try:
+            DB_BLOB.upload_from_filename(LOCAL_DB_PATH)
+            app.logger.info("Uploaded mapping.db to GCS")
+        except Exception as e:
+            app.logger.warning(f"Could not upload DB to GCS: {e}")
 
 def upload_document(fn):
-    local_path = os.path.join(DOC_FOLDER, fn)
-    blob = bucket.blob(f"{DOC_PREFIX}{fn}")
-    blob.upload_from_filename(local_path)
-    app.logger.info(f"Uploaded document {fn} to GCS")
+    if bucket:
+        try:
+            local_path = os.path.join(DOC_FOLDER, fn)
+            blob = bucket.blob(f"{DOC_PREFIX}{fn}")
+            blob.upload_from_filename(local_path)
+            app.logger.info(f"Uploaded document {fn} to GCS")
+        except Exception as e:
+            app.logger.warning(f"Could not upload document {fn} to GCS: {e}")
 
 def delete_document_blob(fn):
-    blob = bucket.blob(f"{DOC_PREFIX}{fn}")
-    try:
-        blob.delete()
-        app.logger.info(f"Deleted document {fn} from GCS")
-    except NotFound:
-        app.logger.warning(f"Document {fn} not found in GCS during delete")
+    if bucket:
+        try:
+            blob = bucket.blob(f"{DOC_PREFIX}{fn}")
+            blob.delete()
+            app.logger.info(f"Deleted document {fn} from GCS")
+        except NotFound:
+            app.logger.warning(f"Document {fn} not found in GCS during delete")
+        except Exception as e:
+            app.logger.warning(f"Could not delete document {fn} from GCS: {e}")
 
 # ==== INITIAL SYNC ON STARTUP ====
 with app.app_context():
@@ -89,6 +111,15 @@ def login_required(fn):
 def index():
     return render_template('index.html')
 
+@app.route('/document/<string:unique_id>')
+def view_document_direct(unique_id):
+    download_db()
+    doc = Document.query.filter_by(unique_id=unique_id).first()
+    if not doc:
+        return jsonify({'error': 'Document not found'}), 404
+    public_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
+    return redirect(public_url)
+
 @app.route('/api/get-document/<string:unique_id>')
 def get_document(unique_id):
     download_db()
@@ -102,13 +133,23 @@ def get_document(unique_id):
 def get_qr(unique_id):
     download_db()
     doc = Document.query.filter_by(unique_id=unique_id).first()
-    if not doc or not doc.qr_data:
+    if not doc:
         return ('', 404)
-    qr_img = qrcode.make(doc.qr_data)
+
+    # When scanned with phone camera, direct to raw certificate image
+    if doc.qr_data and (doc.qr_data.startswith('http://') or doc.qr_data.startswith('https://')):
+        target_url = doc.qr_data
+    else:
+        target_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
+
+    qr_img = qrcode.make(target_url)
     buf = io.BytesIO()
     qr_img.save(buf, format='PNG')
     data_uri = base64.b64encode(buf.getvalue()).decode()
-    return jsonify({'qr_png': f"data:image/png;base64,{data_uri}"})
+    return jsonify({
+        'qr_png': f"data:image/png;base64,{data_uri}",
+        'target_url': target_url
+    })
 
 # ==== AUTH ROUTES ====
 @app.route('/login', methods=['GET', 'POST'])
