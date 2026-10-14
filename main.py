@@ -5,7 +5,7 @@ import qrcode
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, flash, jsonify
+    session, flash, jsonify, send_file
 )
 from flask_sqlalchemy import SQLAlchemy
 from google.cloud import storage
@@ -150,6 +150,29 @@ def get_qr(unique_id):
         'qr_png': f"data:image/png;base64,{data_uri}",
         'target_url': target_url
     })
+
+@app.route('/qr/<string:unique_id>.png')
+def serve_qr_png(unique_id):
+    download_db()
+    doc = Document.query.filter_by(unique_id=unique_id).first()
+    if not doc:
+        return ('Document not found', 404)
+
+    if doc.qr_data and (doc.qr_data.startswith('http://') or doc.qr_data.startswith('https://')):
+        target_url = doc.qr_data
+    else:
+        target_url = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/{DOC_PREFIX}{doc.filename}"
+
+    qr_img = qrcode.make(target_url)
+    buf = io.BytesIO()
+    qr_img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype='image/png',
+        as_attachment=('download' in request.args),
+        download_name=f"{doc.unique_id}_qr.png"
+    )
 
 # ==== AUTH ROUTES ====
 @app.route('/login', methods=['GET', 'POST'])
